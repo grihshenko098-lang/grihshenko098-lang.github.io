@@ -1,39 +1,7 @@
-var selector = document.querySelector(".selector_box");
-selector.addEventListener('click', () => {
-    if (selector.classList.contains("selector_open")){
-        selector.classList.remove("selector_open")
-    }else{
-        selector.classList.add("selector_open")
-    }
-})
-
-document.querySelectorAll(".date_input").forEach((element) => {
-    element.addEventListener('click', () => {
-        document.querySelector(".date").classList.remove("error_shown")
-    })
-})
-
-var sex = "m"
-
-document.querySelectorAll(".selector_option").forEach((option) => {
-    option.addEventListener('click', () => {
-        sex = option.id;
-        document.querySelector(".selected_text").innerHTML = option.innerHTML;
-    })
-})
-
 var upload = document.querySelector(".upload");
-
 var imageInput = document.createElement("input");
 imageInput.type = "file";
 imageInput.accept = ".jpeg,.png,.gif";
-
-document.querySelectorAll(".input_holder").forEach((element) => {
-    var input = element.querySelector(".input");
-    input.addEventListener('click', () => {
-        element.classList.remove("error_shown");
-    });
-});
 
 upload.addEventListener('click', () => {
     imageInput.click();
@@ -41,131 +9,88 @@ upload.addEventListener('click', () => {
 });
 
 imageInput.addEventListener('change', (event) => {
-    upload.classList.remove("upload_loaded");
+    const file = imageInput.files[0];
+    if (!file) return;
+
     upload.classList.add("upload_loading");
-    upload.removeAttribute("selected");
+    upload.classList.remove("upload_loaded");
+    upload.classList.remove("error_shown");
 
-    var file = imageInput.files[0];
-    var reader = new FileReader();
+    // Проверяем размер (IMGBB принимает до 32 МБ, но лучше сжать)
+    if (file.size > 2 * 1024 * 1024) {
+        // Сжимаем через canvas, если > 2 МБ
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement('canvas');
+                const MAX = 1024;
+                let width = img.width;
+                let height = img.height;
 
-    reader.onload = function() {
-        var base64Image = reader.result.split(',')[1];
+                if (width > height) {
+                    if (width > MAX) {
+                        height *= MAX / width;
+                        width = MAX;
+                    }
+                } else {
+                    if (height > MAX) {
+                        width *= MAX / height;
+                        height = MAX;
+                    }
+                }
 
-        var data = new FormData();
-        data.append("key", "99995f1922de96ce94f5af06288ff671"); // IMGBB API key
-        data.append("image", base64Image);
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0, width, height);
 
-        fetch('https://api.imgbb.com/1/upload', {
-            method: 'POST',
-            body: data
-        })
-        .then(result => result.json())
-        .then(response => {
-            if(response.success) {
-                var url = response.data.url;
-                upload.classList.remove("error_shown");
-                upload.setAttribute("selected", url);
-                upload.classList.add("upload_loaded");
-                upload.classList.remove("upload_loading");
-                upload.querySelector(".upload_uploaded").src = url;
-            } else {
-                console.error("Upload failed:", response);
-                upload.classList.remove("upload_loading");
-                upload.classList.add("error_shown");
-            }
-        })
-        .catch(err => {
-            console.error("Upload error:", err);
-            upload.classList.remove("upload_loading");
-            upload.classList.add("error_shown");
-        });
-    };
-
-    reader.readAsDataURL(file);
+                // Конвертируем в JPEG с качеством 0.7
+                const compressed = canvas.toDataURL('image/jpeg', 0.7).split(',')[1];
+                sendToImgbb(compressed);
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        // Если маленькое — отправляем файл напрямую
+        const formData = new FormData();
+        formData.append("key", "99995f1922de96ce94f5af06288ff671");
+        formData.append("image", file);
+        sendFormData(formData);
+    }
 });
 
-document.querySelector(".go").addEventListener('click', () => {
+function sendToImgbb(base64Image) {
+    const formData = new FormData();
+    formData.append("key", "99995f1922de96ce94f5af06288ff671");
+    formData.append("image", base64Image);
 
-    var empty = [];
-
-    var params = new URLSearchParams();
-
-    params.set("sex", sex)
-    if (!upload.hasAttribute("selected")){
-        empty.push(upload);
-        upload.classList.add("error_shown")
-    }else{
-        params.set("image", upload.getAttribute("selected"))
-    }
-
-    var birthday = "";
-    var dateEmpty = false;
-    document.querySelectorAll(".date_input").forEach((element) => {
-        birthday = birthday + "." + element.value
-        if (isEmpty(element.value)){
-            dateEmpty = true;
-        }
-    })
-
-    birthday = birthday.substring(1);
-
-    if (dateEmpty){
-        var dateElement = document.querySelector(".date");
-        dateElement.classList.add("error_shown");
-        empty.push(dateElement);
-    }else{
-        params.set("birthday", birthday)
-    }
-
-    document.querySelectorAll(".input_holder").forEach((element) => {
-
-        var input = element.querySelector(".input");
-
-        if (isEmpty(input.value)){
-            empty.push(element);
-            element.classList.add("error_shown");
-        }else{
-            params.set(input.id, input.value)
-        }
-
-    })
-
-    if (empty.length != 0){
-        empty[0].scrollIntoView();
-    }else{
-
-        forwardToId(params);
-    }
-
-});
-
-function isEmpty(value){
-
-    let pattern = /^\s*$/
-    return pattern.test(value);
-
+    sendFormData(formData);
 }
 
-function forwardToId(params){
-
-    location.href = "id.html?" + params
-
-}
-
-var guide = document.querySelector(".guide_holder");
-guide.addEventListener('click', () => {
-
-    if (guide.classList.contains("unfolded")){
-        guide.classList.remove("unfolded");
-    }else{
-        guide.classList.add("unfolded");
-    }
-
-})
-
-document.querySelectorAll(".input").forEach((input) => {
-    input.value = localStorage.getItem(input.id) || "";
-    input.addEventListener("input", () => {
-        localStorage.setItem(input.id, input.value);
+function sendFormData(formData) {
+    fetch('https://api.imgbb.com/1/upload', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            const url = data.data.url;
+            upload.setAttribute("selected", url);
+            upload.classList.add("upload_loaded");
+            upload.querySelector(".upload_uploaded").src = url;
+            localStorage.setItem('userImage', url);
+        } else {
+            throw new Error("Upload failed");
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        upload.classList.add("error_shown");
+    })
+    .finally(() => {
+        upload.classList.remove("upload_loading");
     });
-});
+    }
